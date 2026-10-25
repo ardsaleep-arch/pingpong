@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f172a">
+
+  <title>Ping Pong</title>
+
+  <style>
+    :root {
+      --bg-start: #0f172a;
+      --bg-end: #1e1b4b;
+      --panel: rgba(15, 23, 42, 0.88);
+      --panel-border: rgba(255, 255, 255, 0.12);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #a78bfa;
+      --accent-hover: #8b5cf6;
+      --left: #38bdf8;
+      --right: #f472b6;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      -webkit-text-size-adjust: 100%;
+      touch-action: manipulation;
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      margin: 0;
+      padding: 16px;
+      padding-left: max(16px, env(safe-area-inset-left));
+      padding-right: max(16px, env(safe-area-inset-right));
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(167, 139, 250, 0.18), transparent 35%),
+        linear-gradient(135deg, var(--bg-start), var(--bg-end));
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    button,
+    select {
+      font: inherit;
+      touch-action: manipulation;
+    }
+
+    .game-container {
+      width: min(100%, 1100px);
+      padding: 18px;
+      border: 1px solid var(--panel-border);
+      border-radius: 22px;
+      background: var(--panel);
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+      backdrop-filter: blur(14px);
+    }
+
+    .game-header {
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    .game-header h1 {
+      margin: 0;
+      font-size: clamp(1.6rem, 5vw, 2.4rem);
+      line-height: 1.1;
+    }
+
+    .controls {
+      margin-bottom: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: end;
+      gap: 10px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-group.hidden {
+      display: none;
+    }
+
+    .control-group label {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    select,
+    .action-button {
+      min-height: 44px;
+      padding: 0 14px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      color: var(--text);
+      background: #334155;
+      outline: none;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    select:focus,
+    .action-button:focus-visible {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.25);
+    }
+
+    select option {
+      color: white;
+      background: #334155;
+    }
+
+    .action-button {
+      border-color: transparent;
+      background: var(--accent);
+      color: #1e1b4b;
+      font-weight: 800;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .action-button.secondary {
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: var(--text);
+      background: #475569;
+    }
+
+    @media (hover: hover) {
+      .action-button:hover {
+        background: var(--accent-hover);
+        transform: translateY(-1px);
+      }
+
+      .action-button.secondary:hover {
+        background: #64748b;
+      }
+    }
+
+    .field-wrapper {
+      position: relative;
+      width: var(--field-width, 100%);
+      margin: 0 auto;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 8 / 5;
+      border: 2px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      background: #020617;
+      touch-action: none;
+      cursor: none;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(2, 6, 23, 0.6);
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .overlay.hidden {
+      display: none;
+    }
+
+    .overlay-title {
+      font-size: clamp(1.4rem, 5vw, 2.4rem);
+      font-weight: 900;
+    }
+
+    .overlay-text {
+      color: var(--muted);
+      font-size: clamp(0.85rem, 2.4vw, 1.05rem);
+      line-height: 1.6;
+    }
+
+    .instructions {
+      margin: 12px 0 0;
+      color: var(--muted);
+      text-align: center;
+      font-size: 0.85rem;
+      line-height: 1.6;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 8px;
+      }
+
+      .game-container {
+        padding: 12px 8px;
+        border-radius: 16px;
+      }
+
+      .control-group,
+      .action-button {
+        flex: 1 1 130px;
+      }
+
+      select,
+      .action-button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="game-container">
+    <header class="game-header">
+      <h1>🏓 Ping Pong</h1>
+    </header>
+
+    <section class="controls" aria-label="ตั้งค่าเกม">
+      <div class="control-group">
+        <label for="gameMode">โหมดเกม</label>
+        <select id="gameMode">
+          <option value="ai">เล่นกับ AI</option>
+          <option value="pvp">ผู้เล่น 2 คน</option>
+        </select>
+      </div>
+
+      <div id="difficultyGroup" class="control-group">
+        <label for="difficulty">ระดับ AI</label>
+        <select id="difficulty">
+          <option value="easy">ง่าย</option>
+          <option value="medium" selected>ปานกลาง</option>
+          <option value="hard">ยาก</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label for="winScore">แต้มที่ชนะ</label>
+        <select id="winScore">
+          <option value="5">5 แต้ม</option>
+          <option value="11" selected>11 แต้ม</option>
+          <option value="21">21 แต้ม</option>
+        </select>
+      </div>
+
+      <button id="newGameButton" class="action-button" type="button">
+        เริ่มเกมใหม่
+      </button>
+
+      <button id="pauseButton" class="action-button secondary" type="button">
+        ⏸ หยุดชั่วคราว
+      </button>
+
+      <button id="soundButton" class="action-button secondary" type="button">
+        🔊 เสียง: เปิด
+      </button>
+    </section>
+
+    <div class="field-wrapper">
+      <canvas id="field" aria-label="สนาม Ping Pong"></canvas>
+
+      <div id="overlay" class="overlay">
+        <div id="overlayTitle" class="overlay-title">พร้อมหรือยัง?</div>
+        <div id="overlayText" class="overlay-text">แตะหรือกด Space เพื่อเริ่ม</div>
+      </div>
+    </div>
+
+    <p class="instructions">
+      iPad / โทรศัพท์: ลากนิ้วขึ้นลงบนครึ่งสนามของคุณเพื่อขยับไม้
+      (โหมด 2 คน: คนละครึ่งสนาม ใช้นิ้วพร้อมกันได้)<br>
+      คอมพิวเตอร์: ผู้เล่นซ้ายใช้ W / S หรือเมาส์ · ผู้เล่นขวาใช้ ↑ / ↓ ·
+      Space หยุด/เล่นต่อ
+    </p>
+  </main>
+
+  <script>
+    "use strict";
+
+    // Logical field size; the canvas is scaled to fit the screen.
+    const FIELD_WIDTH = 800;
+    const FIELD_HEIGHT = 500;
+    const PADDLE_WIDTH = 14;
+    const PADDLE_HEIGHT = 90;
+    const PADDLE_MARGIN = 24;
+    const PADDLE_KEY_SPEED = 520;
+    const BALL_SIZE = 14;
+    const BALL_START_SPEED = 380;
+    const BALL_MAX_SPEED = 900;
+    const BALL_SPEEDUP = 1.06;
+    const MAX_BOUNCE_ANGLE = Math.PI / 3.2;
+
+    const AI_LEVELS = {
+      easy: { speed: 240, reaction: 0.3, error: 80 },
+      medium: { speed: 330, reaction: 0.24, error: 72 },
+      hard: { speed: 440, reaction: 0.16, error: 60 }
+    };
+
+    const canvas = document.getElementById("field");
+    const context = canvas.getContext("2d");
+    const fieldWrapper = document.querySelector(".field-wrapper");
+    const overlayElement = document.getElementById("overlay");
+    const overlayTitle = document.getElementById("overlayTitle");
+    const overlayText = document.getElementById("overlayText");
+    const gameModeElement = document.getElementById("gameMode");
+    const difficultyElement = document.getElementById("difficulty");
+    const difficultyGroup = document.getElementById("difficultyGroup");
+    const winScoreElement = document.getElementById("winScore");
+    const newGameButton = document.getElementById("newGameButton");
+    const pauseButton = document.getElementById("pauseButton");
+    const soundButton = document.getElementById("soundButton");
+
+    const leftPaddle = createPaddle(PADDLE_MARGIN);
+    const rightPaddle = createPaddle(
+      FIELD_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH
+    );
+
+    const ball = {
+      x: 0,
+      y: 0,
+      velocityX: 0,
+      velocityY: 0,
+      speed: BALL_START_SPEED
+    };
+
+    // "ready" (waiting to serve), "playing", "paused", "over"
+    let state = "ready";
+    let leftScore = 0;
+    let rightScore = 0;
+    let serveDirection = 1;
+    let lastFrameTime = 0;
+    let aiTargetY = FIELD_HEIGHT / 2;
+    let aiReactionTimer = 0;
+    let soundOn = true;
+    let audioContext = null;
+
+    const pressedKeys = new Set();
+    // pointerId -> "left" | "right"
+    const activePointers = new Map();
+
+    function createPaddle(x) {
+      return {
+        x,
+        y: (FIELD_HEIGHT - PADDLE_HEIGHT) / 2,
+        targetY: null
+      };
+    }
+
+    function isAIMode() {
+      return gameModeElement.value === "ai";
+    }
+
+    function startNewGame() {
+      leftScore = 0;
+      rightScore = 0;
+      serveDirection = Math.random() < 0.5 ? -1 : 1;
+
+      leftPaddle.y = (FIELD_HEIGHT - PADDLE_HEIGHT) / 2;
+      rightPaddle.y = (FIELD_HEIGHT - PADDLE_HEIGHT) / 2;
+      leftPaddle.targetY = null;
+      rightPaddle.targetY = null;
+
+      resetBall();
+      state = "ready";
+      showOverlay("พร้อมหรือยัง?", "แตะสนามหรือกด Space เพื่อเริ่ม");
+      updatePauseButton();
+    }
+
+    function resetBall() {
+      ball.x = (FIELD_WIDTH - BALL_SIZE) / 2;
+      ball.y = (FIELD_HEIGHT - BALL_SIZE) / 2;
+      ball.speed = BALL_START_SPEED;
+
+      const angle = (Math.random() * 2 - 1) * (Math.PI / 6);
+
+      ball.velocityX = Math.cos(angle) * ball.speed * serveDirection;
+      ball.velocityY = Math.sin(angle) * ball.speed;
+
+      aiTargetY = FIELD_HEIGHT / 2;
+    }
+
+    function serve() {
+      unlockAudio();
+      hideOverlay();
+      state = "playing";
+      updatePauseButton();
+    }
+
+    function togglePause() {
+      if (state === "playing") {
+        state = "paused";
+        showOverlay("หยุดชั่วคราว", "แตะสนามหรือกด Space เพื่อเล่นต่อ");
+      } else if (state === "paused" || state === "ready") {
+        serve();
+      } else if (state === "over") {
+        startNewGame();
+      }
+
+      updatePauseButton();
+    }
+
+    function updatePauseButton() {
+      pauseButton.textContent = state === "playing"
+        ? "⏸ หยุดชั่วคราว"
+        : "▶ เล่นต่อ";
+    }
+
+    function showOverlay(title, text) {
+      overlayTitle.textContent = title;
+      overlayText.textContent = text;
+      overlayElement.classList.remove("hidden");
+    }
+
+    function hideOverlay() {
+      overlayElement.classList.add("hidden");
+    }
+
+    function update(deltaTime) {
+      updatePlayerPaddle(leftPaddle, "KeyW", "KeyS", deltaTime);
+
+      if (isAIMode()) {
+        updateAIPaddle(deltaTime);
+      } else {
+        updatePlayerPaddle(rightPaddle, "ArrowUp", "ArrowDown", deltaTime);
+      }
+
+      if (state !== "playing") {
+        return;
+      }
+
+      ball.x += ball.velocityX * deltaTime;
+      ball.y += ball.velocityY * deltaTime;
+
+      if (ball.y <= 0) {
+        ball.y = 0;
+        ball.velocityY = Math.abs(ball.velocityY);
+        playSound(300, 0.04);
+      } else if (ball.y + BALL_SIZE >= FIELD_HEIGHT) {
+        ball.y = FIELD_HEIGHT - BALL_SIZE;
+        ball.velocityY = -Math.abs(ball.velocityY);
+        playSound(300, 0.04);
+      }
+
+      if (ball.velocityX < 0 && hitsPaddle(leftPaddle)) {
+        bounceOffPaddle(leftPaddle, 1);
+      } else if (ball.velocityX > 0 && hitsPaddle(rightPaddle)) {
+        bounceOffPaddle(rightPaddle, -1);
+      }
+
+      if (ball.x + BALL_SIZE < 0) {
+        scorePoint("right");
+      } else if (ball.x > FIELD_WIDTH) {
+        scorePoint("left");
+      }
+    }
+
+    function updatePlayerPaddle(paddle, upKey, downKey, deltaTime) {
+      let direction = 0;
+
+      if (pressedKeys.has(upKey)) {
+        direction -= 1;
+      }
+
+      if (pressedKeys.has(downKey)) {
+        direction += 1;
+      }
+
+      // In AI mode the arrow keys also move the player's paddle.
+      if (paddle === leftPaddle && isAIMode()) {
+        if (pressedKeys.has("ArrowUp")) {
+          direction -= 1;
+        }
+
+        if (pressedKeys.has("ArrowDown")) {
+          direction += 1;
+        }
+      }
+
+      if (direction !== 0) {
+        paddle.targetY = null;
+        paddle.y += Math.sign(direction) * PADDLE_KEY_SPEED * deltaTime;
+      } else if (paddle.targetY !== null) {
+        // Follow the finger/mouse closely but smoothly.
+        const follow = Math.min(1, deltaTime * 25);
+        paddle.y += (paddle.targetY - paddle.y) * follow;
+      }
+
+      clampPaddle(paddle);
+    }
+
+    function updateAIPaddle(deltaTime) {
+      const level = AI_LEVELS[difficultyElement.value];
+
+      aiReactionTimer -= deltaTime;
+
+      if (aiReactionTimer <= 0) {
+        aiReactionTimer = level.reaction;
+
+        if (state === "playing" && ball.velocityX > 0) {
+          aiTargetY =
+            predictBallY(rightPaddle.x) +
+            (Math.random() * 2 - 1) * level.error;
+        } else {
+          aiTargetY = FIELD_HEIGHT / 2;
+        }
+      }
+
+      const paddleCenter = rightPaddle.y + PADDLE_HEIGHT / 2;
+      const distance = aiTargetY - paddleCenter;
+      const step = level.speed * deltaTime;
+
+      if (Math.abs(distance) > 4) {
+        rightPaddle.y += Math.max(-step, Math.min(step, distance));
+      }
+
+      clampPaddle(rightPaddle);
+    }
+
+    function predictBallY(targetX) {
+      const time = (targetX - (ball.x + BALL_SIZE)) / ball.velocityX;
+      const span = FIELD_HEIGHT - BALL_SIZE;
+      let y = ball.y + ball.velocityY * Math.max(0, time);
+
+      // Unfold wall bounces.
+      y = ((y % (2 * span)) + 2 * span) % (2 * span);
+
+      if (y > span) {
+        y = 2 * span - y;
+      }
+
+      return y + BALL_SIZE / 2;
+    }
+
+    function clampPaddle(paddle) {
+      paddle.y = Math.max(
+        0,
+        Math.min(FIELD_HEIGHT - PADDLE_HEIGHT, paddle.y)
+      );
+    }
+
+    function hitsPaddle(paddle) {
+      return (
+        ball.x < paddle.x + PADDLE_WIDTH &&
+        ball.x + BALL_SIZE > paddle.x &&
+        ball.y < paddle.y + PADDLE_HEIGHT &&
+        ball.y + BALL_SIZE > paddle.y
+      );
+    }
+
+    function bounceOffPaddle(paddle, direction) {
+      const paddleCenter = paddle.y + PADDLE_HEIGHT / 2;
+      const ballCenter = ball.y + BALL_SIZE / 2;
+      const offset = Math.max(
+        -1,
+        Math.min(1, (ballCenter - paddleCenter) / (PADDLE_HEIGHT / 2))
+      );
+      const angle = offset * MAX_BOUNCE_ANGLE;
+
+      ball.speed = Math.min(BALL_MAX_SPEED, ball.speed * BALL_SPEEDUP);
+      ball.velocityX = Math.cos(angle) * ball.speed * direction;
+      ball.velocityY = Math.sin(angle) * ball.speed;
+
+      ball.x = direction > 0
+        ? paddle.x + PADDLE_WIDTH
+        : paddle.x - BALL_SIZE;
+
+      playSound(520, 0.05);
+    }
+
+    function scorePoint(side) {
+      if (side === "left") {
+        leftScore++;
+        serveDirection = 1;
+      } else {
+        rightScore++;
+        serveDirection = -1;
+      }
+
+      playSound(180, 0.18);
+
+      const winScore = Number(winScoreElement.value);
+
+      if (leftScore >= winScore || rightScore >= winScore) {
+        state = "over";
+
+        const winner = leftScore > rightScore
+          ? (isAIMode() ? "คุณชนะ! 🎉" : "ผู้เล่นซ้ายชนะ! 🎉")
+          : (isAIMode() ? "AI ชนะ" : "ผู้เล่นขวาชนะ! 🎉");
+
+        showOverlay(
+          winner,
+          `${leftScore} : ${rightScore} — แตะเพื่อเริ่มเกมใหม่`
+        );
+        updatePauseButton();
+        resetBall();
+        return;
+      }
+
+      resetBall();
+      state = "ready";
+      showOverlay(
+        `${leftScore} : ${rightScore}`,
+        "แตะสนามหรือกด Space เพื่อเสิร์ฟ"
+      );
+      updatePauseButton();
+    }
+
+    function draw() {
+      context.clearRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+
+      // Center line
+      context.fillStyle = "rgba(255, 255, 255, 0.18)";
+
+      for (let y = 10; y < FIELD_HEIGHT; y += 30) {
+        context.fillRect(FIELD_WIDTH / 2 - 2, y, 4, 16);
+      }
+
+      // Scores
+      context.font = "800 64px system-ui, -apple-system, sans-serif";
+      context.textAlign = "center";
+      context.textBaseline = "top";
+      context.fillStyle = "rgba(255, 255, 255, 0.22)";
+      context.fillText(leftScore, FIELD_WIDTH / 4, 24);
+      context.fillText(rightScore, (FIELD_WIDTH * 3) / 4, 24);
+
+      drawPaddle(leftPaddle, "#38bdf8");
+      drawPaddle(rightPaddle, "#f472b6");
+
+      // Ball
+      context.fillStyle = "#f8fafc";
+      context.shadowColor = "rgba(248, 250, 252, 0.8)";
+      context.shadowBlur = 14;
+      context.beginPath();
+      context.arc(
+        ball.x + BALL_SIZE / 2,
+        ball.y + BALL_SIZE / 2,
+        BALL_SIZE / 2,
+        0,
+        Math.PI * 2
+      );
+      context.fill();
+      context.shadowBlur = 0;
+    }
+
+    function drawPaddle(paddle, color) {
+      context.fillStyle = color;
+      context.shadowColor = color;
+      context.shadowBlur = 16;
+      roundRect(paddle.x, paddle.y, PADDLE_WIDTH, PADDLE_HEIGHT, 7);
+      context.fill();
+      context.shadowBlur = 0;
+    }
+
+    function roundRect(x, y, width, height, radius) {
+      context.beginPath();
+      context.moveTo(x + radius, y);
+      context.arcTo(x + width, y, x + width, y + height, radius);
+      context.arcTo(x + width, y + height, x, y + height, radius);
+      context.arcTo(x, y + height, x, y, radius);
+      context.arcTo(x, y, x + width, y, radius);
+      context.closePath();
+    }
+
+    function gameLoop(time) {
+      // Clamp the step so a backgrounded tab doesn't teleport the ball.
+      const deltaTime = Math.min(0.033, (time - lastFrameTime) / 1000 || 0);
+      lastFrameTime = time;
+
+      update(deltaTime);
+      draw();
+
+      window.requestAnimationFrame(gameLoop);
+    }
+
+    // ---------- Input: touch / pen / mouse ----------
+
+    function toFieldPosition(event) {
+      const rect = canvas.getBoundingClientRect();
+
+      return {
+        x: ((event.clientX - rect.left) / rect.width) * FIELD_WIDTH,
+        y: ((event.clientY - rect.top) / rect.height) * FIELD_HEIGHT
+      };
+    }
+
+    function getSideForPosition(position) {
+      if (isAIMode()) {
+        return "left";
+      }
+
+      return position.x < FIELD_WIDTH / 2 ? "left" : "right";
+    }
+
+    function movePaddleToPointer(side, position) {
+      const paddle = side === "left" ? leftPaddle : rightPaddle;
+      paddle.targetY = position.y - PADDLE_HEIGHT / 2;
+    }
+
+    function handlePointerDown(event) {
+      event.preventDefault();
+
+      const position = toFieldPosition(event);
+      const side = getSideForPosition(position);
+
+      activePointers.set(event.pointerId, side);
+
+      if (canvas.setPointerCapture) {
+        canvas.setPointerCapture(event.pointerId);
+      }
+
+      movePaddleToPointer(side, position);
+    }
+
+    function handlePointerMove(event) {
+      const position = toFieldPosition(event);
+
+      if (activePointers.has(event.pointerId)) {
+        event.preventDefault();
+        movePaddleToPointer(activePointers.get(event.pointerId), position);
+        return;
+      }
+
+      // A mouse hovering over the field steers the player's paddle.
+      if (event.pointerType === "mouse") {
+        movePaddleToPointer(getSideForPosition(position), position);
+      }
+    }
+
+    function handlePointerEnd(event) {
+      activePointers.delete(event.pointerId);
+    }
+
+    canvas.addEventListener("pointerdown", handlePointerDown);
+    canvas.addEventListener("pointermove", handlePointerMove);
+    canvas.addEventListener("pointerup", handlePointerEnd);
+    canvas.addEventListener("pointercancel", handlePointerEnd);
+    canvas.addEventListener("contextmenu", event => event.preventDefault());
+
+    overlayElement.addEventListener("pointerdown", event => {
+      event.preventDefault();
+      togglePause();
+
+      // Let the finger that served keep steering the paddle.
+      if (state === "playing") {
+        handlePointerDown(event);
+      }
+    });
+
+    // Stop iOS Safari from scrolling or zooming while playing.
+    document.addEventListener(
+      "touchmove",
+      event => {
+        if (event.target === canvas || event.target.closest(".overlay")) {
+          event.preventDefault();
+        }
+      },
+      { passive: false }
+    );
+
+    document.addEventListener("gesturestart", event => event.preventDefault());
+
+    // ---------- Input: keyboard ----------
+
+    const GAME_KEYS = new Set([
+      "KeyW", "KeyS", "ArrowUp", "ArrowDown", "Space"
+    ]);
+
+    window.addEventListener("keydown", event => {
+      if (event.target.tagName === "SELECT") {
+        return;
+      }
+
+      if (GAME_KEYS.has(event.code)) {
+        event.preventDefault();
+      }
+
+      if (event.code === "Space") {
+        if (!event.repeat) {
+          togglePause();
+        }
+
+        return;
+      }
+
+      pressedKeys.add(event.code);
+    });
+
+    window.addEventListener("keyup", event => {
+      pressedKeys.delete(event.code);
+
+      // Stop Space from also clicking a focused button.
+      if (GAME_KEYS.has(event.code) && event.target.tagName !== "SELECT") {
+        event.preventDefault();
+      }
+    });
+
+    window.addEventListener("blur", () => {
+      pressedKeys.clear();
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && state === "playing") {
+        togglePause();
+      }
+    });
+
+    // ---------- Sound ----------
+
+    function unlockAudio() {
+      // iOS only allows audio after a user gesture.
+      if (!soundOn) {
+        return;
+      }
+
+      if (!audioContext) {
+        const AudioContextClass =
+          window.AudioContext || window.webkitAudioContext;
+
+        if (!AudioContextClass) {
+          return;
+        }
+
+        audioContext = new AudioContextClass();
+      }
+
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
+    }
+
+    function playSound(frequency, duration) {
+      if (!soundOn || !audioContext) {
+        return;
+      }
+
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const now = audioContext.currentTime;
+
+      oscillator.type = "square";
+      oscillator.frequency.value = frequency;
+      gain.gain.setValueAtTime(0.08, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + duration);
+    }
+
+    function toggleSound() {
+      soundOn = !soundOn;
+      soundButton.textContent = soundOn ? "🔊 เสียง: เปิด" : "🔇 เสียง: ปิด";
+
+      if (soundOn) {
+        unlockAudio();
+      }
+    }
+
+    // ---------- Layout ----------
+
+    function fitFieldToScreen() {
+      // Make the whole field visible without scrolling, e.g. on an iPad
+      // in landscape where the viewport is short.
+      const wrapperTop =
+        fieldWrapper.getBoundingClientRect().top + window.scrollY;
+      const availableHeight =
+        window.innerHeight - Math.min(wrapperTop, 260) - 90;
+      const widthByHeight = Math.max(320, availableHeight) * (8 / 5);
+
+      document.documentElement.style.setProperty(
+        "--field-width",
+        `min(100%, ${Math.floor(widthByHeight)}px)`
+      );
+
+      // Render at device resolution so it stays sharp on Retina screens.
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, 3);
+      const displayWidth = canvas.clientWidth || FIELD_WIDTH;
+      const scale = (displayWidth * pixelRatio) / FIELD_WIDTH;
+
+      canvas.width = Math.round(FIELD_WIDTH * scale);
+      canvas.height = Math.round(FIELD_HEIGHT * scale);
+      canvas.style.height = `${(displayWidth * 5) / 8}px`;
+      context.setTransform(scale, 0, 0, scale, 0, 0);
+
+      draw();
+    }
+
+    let resizeFrame = null;
+
+    function handleResize() {
+      if (resizeFrame !== null) {
+        window.cancelAnimationFrame(resizeFrame);
+      }
+
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = null;
+        fitFieldToScreen();
+      });
+    }
+
+    function updateControlVisibility() {
+      difficultyGroup.classList.toggle("hidden", !isAIMode());
+    }
+
+    gameModeElement.addEventListener("change", () => {
+      updateControlVisibility();
+      startNewGame();
+    });
+
+    winScoreElement.addEventListener("change", startNewGame);
+    newGameButton.addEventListener("click", startNewGame);
+    pauseButton.addEventListener("click", togglePause);
+    soundButton.addEventListener("click", toggleSound);
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+
+    updateControlVisibility();
+    startNewGame();
+    fitFieldToScreen();
+    window.requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
