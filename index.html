@@ -272,6 +272,10 @@
         ⏸ หยุดชั่วคราว
       </button>
 
+      <button id="orientationButton" class="action-button secondary" type="button">
+        ↔ แนวซ้าย-ขวา
+      </button>
+
       <button id="soundButton" class="action-button secondary" type="button">
         🔊 เสียง: เปิด
       </button>
@@ -286,12 +290,7 @@
       </div>
     </div>
 
-    <p class="instructions">
-      iPad / โทรศัพท์: ลากนิ้วขึ้นลงบนครึ่งสนามของคุณเพื่อขยับไม้
-      (โหมด 2 คน: คนละครึ่งสนาม ใช้นิ้วพร้อมกันได้)<br>
-      คอมพิวเตอร์: ผู้เล่นซ้ายใช้ W / S หรือเมาส์ · ผู้เล่นขวาใช้ ↑ / ↓ ·
-      Space หยุด/เล่นต่อ
-    </p>
+    <p id="instructions" class="instructions"></p>
   </main>
 
   <script>
@@ -329,6 +328,9 @@
     const newGameButton = document.getElementById("newGameButton");
     const pauseButton = document.getElementById("pauseButton");
     const soundButton = document.getElementById("soundButton");
+    const orientationButton = document.getElementById("orientationButton");
+    const instructionsElement = document.getElementById("instructions");
+    const ORIENTATION_STORAGE_KEY = "pingpong-orientation";
 
     const leftPaddle = createPaddle(PADDLE_MARGIN);
     const rightPaddle = createPaddle(
@@ -354,6 +356,10 @@
     let soundOn = true;
     let audioContext = null;
 
+    // "horizontal": paddles left/right. "vertical": the same game rotated
+    // 90° so the left player sits at the bottom and the right player on top.
+    let orientation = "horizontal";
+
     const pressedKeys = new Set();
     // pointerId -> "left" | "right"
     const activePointers = new Map();
@@ -368,6 +374,40 @@
 
     function isAIMode() {
       return gameModeElement.value === "ai";
+    }
+
+    function isVertical() {
+      return orientation === "vertical";
+    }
+
+    function getSideName(side) {
+      if (side === "left") {
+        return isVertical() ? "ผู้เล่นล่าง" : "ผู้เล่นซ้าย";
+      }
+
+      return isVertical() ? "ผู้เล่นบน" : "ผู้เล่นขวา";
+    }
+
+    // Keys that move each paddle toward smaller / larger field y.
+    function getKeyBindings() {
+      if (isVertical()) {
+        const bottomExtra = isAIMode() ? ["KeyA"] : [];
+        const bottomExtraDown = isAIMode() ? ["KeyD"] : [];
+
+        return {
+          leftUp: ["ArrowLeft", ...bottomExtra],
+          leftDown: ["ArrowRight", ...bottomExtraDown],
+          rightUp: ["KeyA"],
+          rightDown: ["KeyD"]
+        };
+      }
+
+      return {
+        leftUp: ["KeyW", ...(isAIMode() ? ["ArrowUp"] : [])],
+        leftDown: ["KeyS", ...(isAIMode() ? ["ArrowDown"] : [])],
+        rightUp: ["ArrowUp"],
+        rightDown: ["ArrowDown"]
+      };
     }
 
     function startNewGame() {
@@ -436,12 +476,19 @@
     }
 
     function update(deltaTime) {
-      updatePlayerPaddle(leftPaddle, "KeyW", "KeyS", deltaTime);
+      const keys = getKeyBindings();
+
+      updatePlayerPaddle(leftPaddle, keys.leftUp, keys.leftDown, deltaTime);
 
       if (isAIMode()) {
         updateAIPaddle(deltaTime);
       } else {
-        updatePlayerPaddle(rightPaddle, "ArrowUp", "ArrowDown", deltaTime);
+        updatePlayerPaddle(
+          rightPaddle,
+          keys.rightUp,
+          keys.rightDown,
+          deltaTime
+        );
       }
 
       if (state !== "playing") {
@@ -474,26 +521,15 @@
       }
     }
 
-    function updatePlayerPaddle(paddle, upKey, downKey, deltaTime) {
+    function updatePlayerPaddle(paddle, upKeys, downKeys, deltaTime) {
       let direction = 0;
 
-      if (pressedKeys.has(upKey)) {
+      if (upKeys.some(key => pressedKeys.has(key))) {
         direction -= 1;
       }
 
-      if (pressedKeys.has(downKey)) {
+      if (downKeys.some(key => pressedKeys.has(key))) {
         direction += 1;
-      }
-
-      // In AI mode the arrow keys also move the player's paddle.
-      if (paddle === leftPaddle && isAIMode()) {
-        if (pressedKeys.has("ArrowUp")) {
-          direction -= 1;
-        }
-
-        if (pressedKeys.has("ArrowDown")) {
-          direction += 1;
-        }
       }
 
       if (direction !== 0) {
@@ -604,8 +640,8 @@
         state = "over";
 
         const winner = leftScore > rightScore
-          ? (isAIMode() ? "คุณชนะ! 🎉" : "ผู้เล่นซ้ายชนะ! 🎉")
-          : (isAIMode() ? "AI ชนะ" : "ผู้เล่นขวาชนะ! 🎉");
+          ? (isAIMode() ? "คุณชนะ! 🎉" : `${getSideName("left")}ชนะ! 🎉`)
+          : (isAIMode() ? "AI ชนะ" : `${getSideName("right")}ชนะ! 🎉`);
 
         showOverlay(
           winner,
@@ -626,7 +662,18 @@
     }
 
     function draw() {
-      context.clearRect(0, 0, FIELD_WIDTH, FIELD_HEIGHT);
+      context.clearRect(0, 0, getViewWidth(), getViewHeight());
+
+      drawScores();
+
+      context.save();
+
+      // Vertical layout: rotate the field so field x runs bottom → top
+      // (screen x = field y, screen y = FIELD_WIDTH - field x).
+      if (isVertical()) {
+        context.translate(0, FIELD_WIDTH);
+        context.rotate(-Math.PI / 2);
+      }
 
       // Center line
       context.fillStyle = "rgba(255, 255, 255, 0.18)";
@@ -634,14 +681,6 @@
       for (let y = 10; y < FIELD_HEIGHT; y += 30) {
         context.fillRect(FIELD_WIDTH / 2 - 2, y, 4, 16);
       }
-
-      // Scores
-      context.font = "800 64px system-ui, -apple-system, sans-serif";
-      context.textAlign = "center";
-      context.textBaseline = "top";
-      context.fillStyle = "rgba(255, 255, 255, 0.22)";
-      context.fillText(leftScore, FIELD_WIDTH / 4, 24);
-      context.fillText(rightScore, (FIELD_WIDTH * 3) / 4, 24);
 
       drawPaddle(leftPaddle, "#38bdf8");
       drawPaddle(rightPaddle, "#f472b6");
@@ -660,6 +699,37 @@
       );
       context.fill();
       context.shadowBlur = 0;
+
+      context.restore();
+    }
+
+    // Scores are drawn unrotated so the digits stay upright.
+    function drawScores() {
+      context.font = "800 64px system-ui, -apple-system, sans-serif";
+      context.fillStyle = "rgba(255, 255, 255, 0.22)";
+
+      if (isVertical()) {
+        context.textAlign = "left";
+        context.textBaseline = "bottom";
+        context.fillText(rightScore, 24, FIELD_WIDTH / 2 - 14);
+        context.textBaseline = "top";
+        context.fillText(leftScore, 24, FIELD_WIDTH / 2 + 14);
+        return;
+      }
+
+      context.textAlign = "center";
+      context.textBaseline = "top";
+      context.fillText(leftScore, FIELD_WIDTH / 4, 24);
+      context.fillText(rightScore, (FIELD_WIDTH * 3) / 4, 24);
+    }
+
+    // Size of the drawing area in field units, after any rotation.
+    function getViewWidth() {
+      return isVertical() ? FIELD_HEIGHT : FIELD_WIDTH;
+    }
+
+    function getViewHeight() {
+      return isVertical() ? FIELD_WIDTH : FIELD_HEIGHT;
     }
 
     function drawPaddle(paddle, color) {
@@ -696,10 +766,19 @@
 
     function toFieldPosition(event) {
       const rect = canvas.getBoundingClientRect();
+      const fractionX = (event.clientX - rect.left) / rect.width;
+      const fractionY = (event.clientY - rect.top) / rect.height;
+
+      if (isVertical()) {
+        return {
+          x: (1 - fractionY) * FIELD_WIDTH,
+          y: fractionX * FIELD_HEIGHT
+        };
+      }
 
       return {
-        x: ((event.clientX - rect.left) / rect.width) * FIELD_WIDTH,
-        y: ((event.clientY - rect.top) / rect.height) * FIELD_HEIGHT
+        x: fractionX * FIELD_WIDTH,
+        y: fractionY * FIELD_HEIGHT
       };
     }
 
@@ -756,6 +835,9 @@
     canvas.addEventListener("pointercancel", handlePointerEnd);
     canvas.addEventListener("contextmenu", event => event.preventDefault());
 
+    // Let the mouse line up the paddle while the "ready" overlay is showing.
+    overlayElement.addEventListener("pointermove", handlePointerMove);
+
     overlayElement.addEventListener("pointerdown", event => {
       event.preventDefault();
       togglePause();
@@ -782,7 +864,8 @@
     // ---------- Input: keyboard ----------
 
     const GAME_KEYS = new Set([
-      "KeyW", "KeyS", "ArrowUp", "ArrowDown", "Space"
+      "KeyW", "KeyS", "KeyA", "KeyD",
+      "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space"
     ]);
 
     window.addEventListener("keydown", event => {
@@ -886,7 +969,10 @@
         fieldWrapper.getBoundingClientRect().top + window.scrollY;
       const availableHeight =
         window.innerHeight - Math.min(wrapperTop, 260) - 90;
-      const widthByHeight = Math.max(320, availableHeight) * (8 / 5);
+      const viewWidth = getViewWidth();
+      const viewHeight = getViewHeight();
+      const widthByHeight =
+        Math.max(320, availableHeight) * (viewWidth / viewHeight);
 
       document.documentElement.style.setProperty(
         "--field-width",
@@ -895,12 +981,13 @@
 
       // Render at device resolution so it stays sharp on Retina screens.
       const pixelRatio = Math.min(window.devicePixelRatio || 1, 3);
-      const displayWidth = canvas.clientWidth || FIELD_WIDTH;
-      const scale = (displayWidth * pixelRatio) / FIELD_WIDTH;
+      const displayWidth = canvas.clientWidth || viewWidth;
+      const scale = (displayWidth * pixelRatio) / viewWidth;
 
-      canvas.width = Math.round(FIELD_WIDTH * scale);
-      canvas.height = Math.round(FIELD_HEIGHT * scale);
-      canvas.style.height = `${(displayWidth * 5) / 8}px`;
+      canvas.width = Math.round(viewWidth * scale);
+      canvas.height = Math.round(viewHeight * scale);
+      canvas.style.aspectRatio = `${viewWidth} / ${viewHeight}`;
+      canvas.style.height = `${(displayWidth * viewHeight) / viewWidth}px`;
       context.setTransform(scale, 0, 0, scale, 0, 0);
 
       draw();
@@ -921,12 +1008,82 @@
 
     function updateControlVisibility() {
       difficultyGroup.classList.toggle("hidden", !isAIMode());
+      updateInstructions();
+    }
+
+    function updateInstructions() {
+      if (isVertical()) {
+        instructionsElement.innerHTML =
+          "iPad / โทรศัพท์: ลากนิ้วซ้าย-ขวาบนครึ่งสนามของคุณเพื่อขยับไม้ " +
+          "(โหมด 2 คน: คนละครึ่งสนาม ใช้นิ้วพร้อมกันได้)<br>" +
+          (isAIMode()
+            ? "คอมพิวเตอร์: ← / → หรือ A / D หรือเมาส์ · Space หยุด/เล่นต่อ"
+            : "คอมพิวเตอร์: ผู้เล่นล่างใช้ ← / → หรือเมาส์ · " +
+              "ผู้เล่นบนใช้ A / D · Space หยุด/เล่นต่อ");
+        return;
+      }
+
+      instructionsElement.innerHTML =
+        "iPad / โทรศัพท์: ลากนิ้วขึ้น-ลงบนครึ่งสนามของคุณเพื่อขยับไม้ " +
+        "(โหมด 2 คน: คนละครึ่งสนาม ใช้นิ้วพร้อมกันได้)<br>" +
+        (isAIMode()
+          ? "คอมพิวเตอร์: W / S หรือ ↑ / ↓ หรือเมาส์ · Space หยุด/เล่นต่อ"
+          : "คอมพิวเตอร์: ผู้เล่นซ้ายใช้ W / S หรือเมาส์ · " +
+            "ผู้เล่นขวาใช้ ↑ / ↓ · Space หยุด/เล่นต่อ");
+    }
+
+    function setOrientation(newOrientation) {
+      orientation = newOrientation;
+
+      orientationButton.textContent = isVertical()
+        ? "↕ แนวบน-ล่าง"
+        : "↔ แนวซ้าย-ขวา";
+
+      // Don't keep the ball flying while the field turns under the player.
+      if (state === "playing") {
+        togglePause();
+      }
+
+      pressedKeys.clear();
+      activePointers.clear();
+      leftPaddle.targetY = null;
+      rightPaddle.targetY = null;
+
+      updateInstructions();
+      fitFieldToScreen();
+    }
+
+    function toggleOrientation() {
+      setOrientation(isVertical() ? "horizontal" : "vertical");
+
+      try {
+        localStorage.setItem(ORIENTATION_STORAGE_KEY, orientation);
+      } catch (error) {
+        // Storage can be unavailable (private mode); the choice just won't persist.
+      }
+    }
+
+    function getInitialOrientation() {
+      try {
+        const saved = localStorage.getItem(ORIENTATION_STORAGE_KEY);
+
+        if (saved === "horizontal" || saved === "vertical") {
+          return saved;
+        }
+      } catch (error) {
+        // Fall through to the screen-shape default.
+      }
+
+      // A tall screen (e.g. iPad or phone held upright) plays better top-bottom.
+      return window.innerHeight > window.innerWidth ? "vertical" : "horizontal";
     }
 
     gameModeElement.addEventListener("change", () => {
       updateControlVisibility();
       startNewGame();
     });
+
+    orientationButton.addEventListener("click", toggleOrientation);
 
     winScoreElement.addEventListener("change", startNewGame);
     newGameButton.addEventListener("click", startNewGame);
@@ -937,7 +1094,7 @@
 
     updateControlVisibility();
     startNewGame();
-    fitFieldToScreen();
+    setOrientation(getInitialOrientation());
     window.requestAnimationFrame(gameLoop);
   </script>
 </body>
